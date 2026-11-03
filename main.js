@@ -479,7 +479,8 @@ function push() {
 
 function layout() {
   if (!win || !chromeView) return;
-  const { width, height } = win.getContentBounds();
+  // The root view's size, not getContentBounds(): on Wayland the window can report a stale size.
+  const { width, height } = win.contentView.getBounds();
   const top = htmlFullscreen ? 0 : CHROME_H;
   chromeView.setVisible(!htmlFullscreen);
   chromeView.setBounds({ x: 0, y: 0, width, height: CHROME_H });
@@ -830,6 +831,9 @@ if (!app.requestSingleInstanceLock()) {
       pollUsage();
     });
 
+    // The root view resizes however the window changed size (window manager maximize, tiling,
+    // snapping). Window resize events alone miss some of those on Wayland.
+    win.contentView.on('bounds-changed', layout);
     for (const ev of ['resize', 'maximize', 'unmaximize', 'enter-full-screen']) win.on(ev, layout);
     win.on('leave-full-screen', () => {
       // Window left fullscreen some other way (window manager, F11): drop the page out of it too.

@@ -1,7 +1,7 @@
 {
   "name": "nimvane",
   "productName": "Nimvane",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "A fast, lean, privacy-first web browser. Less weight. More web.",
   "homepage": "https://github.com/mauri45fps/nimvane",
   "main": "main.js",
