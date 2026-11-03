@@ -1,0 +1,104 @@
+# Builds installers for Linux, Windows and macOS (macOS can only be built on a Mac).
+#
+# Release a new version:  npm version patch && git push --follow-tags
+# A v* tag creates a draft GitHub Release, every OS uploads its installers and update
+# manifests into it, and the last job publishes it. Installed copies only look at published
+# releases, so they never see a half-uploaded one.
+# Running the workflow by hand (Actions tab) just builds and attaches the files to the run.
+name: Build installers
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  TAG: ${{ github.ref_name }}
+
+jobs:
+  draft:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create draft release
+        run: gh release create "$TAG" --draft --title "Nimvane ${TAG#v}" --generate-notes
+
+  build:
+    needs: draft
+    if: always() && (needs.draft.result == 'success' || needs.draft.result == 'skipped')
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: --linux
+          - os: windows-latest
+            target: --win
+          - os: macos-latest
+            target: --mac --x64 --arm64
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install pacman packaging tool
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libarchive-tools
+
+      - run: npm ci
+      - run: npm test
+
+      - name: Build
+        run: npx electron-builder ${{ matrix.target }} --publish never
+        env:
+          # No signing certificates configured yet; build unsigned installers.
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Add .pacman to the Linux update manifest
+        if: runner.os == 'Linux'
+        run: node scripts/add-pacman-update-info.js
+
+      - name: List release files
+        run: |
+          shopt -s nullglob
+          files=(dist/*.AppImage dist/*.deb dist/*.pacman dist/*.exe dist/*.dmg dist/*.zip dist/*.blockmap dist/latest*.yml)
+          printf '%s\n' "${files[@]}" > release-files.txt
+          cat release-files.txt
+
+      - name: Upload to the draft release
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: while IFS= read -r f; do gh release upload "$TAG" "$f" --clobber; done < release-files.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nimvane-${{ runner.os }}
+          path: |
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.pacman
+            dist/*.exe
+            dist/*.dmg
+            dist/*.zip
+            dist/latest*.yml
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish the release
+        run: gh release edit "$TAG" --draft=false --latest

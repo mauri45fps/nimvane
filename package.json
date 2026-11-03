@@ -1,0 +1,137 @@
+{
+  "name": "nimvane",
+  "productName": "Nimvane",
+  "version": "1.0.1",
+  "description": "A fast, lean, privacy-first web browser. Less weight. More web.",
+  "homepage": "https://github.com/mauri45fps/nimvane",
+  "main": "main.js",
+  "desktopName": "nimvane.desktop",
+  "scripts": {
+    "start": "electron .",
+    "test": "node test.js",
+    "dist": "electron-builder",
+    "desktop": "node scripts/install-desktop.js",
+    "dist:linux": "electron-builder --linux && node scripts/add-pacman-update-info.js",
+    "dist:win": "electron-builder --win",
+    "dist:mac": "electron-builder --mac"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "dev.nimvane.app",
+    "productName": "Nimvane",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "**/*",
+      "!test.js",
+      "!README.md",
+      "!Icon.png",
+      "!scripts/**",
+      "!dist/**",
+      "!.claude/**",
+      "!.github/**",
+      "!build/*.nsh"
+    ],
+    "protocols": [
+      {
+        "name": "Web page",
+        "schemes": [
+          "http",
+          "https"
+        ]
+      }
+    ],
+    "fileAssociations": [
+      {
+        "ext": "html",
+        "name": "HTML document",
+        "role": "Viewer"
+      },
+      {
+        "ext": "htm",
+        "name": "HTML document",
+        "role": "Viewer"
+      }
+    ],
+    "linux": {
+      "target": [
+        "AppImage",
+        "pacman",
+        "deb"
+      ],
+      "executableName": "nimvane",
+      "category": "Network;WebBrowser",
+      "synopsis": "Fast, lean, privacy-first web browser",
+      "maintainer": "Nimvane <mauri45fps@users.noreply.github.com>",
+      "mimeTypes": [
+        "text/html"
+      ],
+      "desktop": {
+        "GenericName": "Web Browser",
+        "StartupWMClass": "nimvane",
+        "StartupNotify": "true",
+        "MimeType": "x-scheme-handler/http;x-scheme-handler/https;text/html;"
+      }
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Nimvane",
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.productivity"
+    },
+    "pacman": {
+      "depends": [
+        "gtk3",
+        "nss",
+        "alsa-lib",
+        "libcups",
+        "libdrm",
+        "mesa",
+        "libxkbcommon",
+        "xdg-utils"
+      ]
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "mauri45fps",
+        "repo": "nimvane",
+        "releaseType": "draft"
+      }
+    ]
+  },
+  "allowScripts": {
+    "electron@33.4.11": true
+  },
+  "author": {
+    "name": "Nimvane"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.11"
+  }
+}

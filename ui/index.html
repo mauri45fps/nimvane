@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src https: http: data:">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="tabs"></div>
+  <div id="toolbar">
+    <button id="back" title="Back (Alt+Left)">&#8592;</button>
+    <button id="forward" title="Forward (Alt+Right)">&#8594;</button>
+    <button id="reload" title="Reload (Ctrl+R)">&#8635;</button>
+    <input id="omnibox" type="text" spellcheck="false" autocomplete="off" placeholder="Search or enter address">
+    <span id="shield" title="Trackers and ads blocked on this page">0</span>
+    <button id="update" hidden>Restart to update</button>
+    <button id="usage" title="Resource usage (Shift+Esc)">… MB</button>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
