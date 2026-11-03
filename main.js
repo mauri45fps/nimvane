@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { pathToFileURL } = require('url');
 const { execFileSync } = require('child_process');
-const { resolveInput, stripTracking, matchShortcut, summarizeMetrics, isGoogleSignIn, firefoxUserAgent, SEARCH } = require('./util');
+const { resolveInput, stripTracking, matchShortcut, summarizeMetrics, clientHintHeaders, wantsDetailedHints, cleanUserAgent, SEARCH } = require('./util');
 const { Blocker } = require('./blocker');
 const { startUpdater } = require('./updater');
 
@@ -70,7 +70,7 @@ const tabs = new Map(); // id -> tab (insertion order = tab order)
 let activeId = null;
 let nextId = 1;
 let userAgent = null;
-const GOOGLE_SIGNIN_UA = firefoxUserAgent();
+let uaData = null; // the engine's navigator.userAgentData, for client hint headers
 let htmlFullscreen = false;
 let blockedTotal = 0;
 const closedTabs = []; // URLs for Ctrl+Shift+T
@@ -119,8 +119,6 @@ function ensureView(tab) {
   tab.view = view;
   tab.suspended = false;
   const wc = view.webContents;
-  if (userAgent) wc.setUserAgent(userAgent);
-
   wc.setWindowOpenHandler(({ url, disposition }) => {
     // Real popups (window.open with features) stay popups so sign-in flows keep window.opener.
     if (disposition === 'new-window') {
@@ -596,7 +594,8 @@ function toggleUsage(open = !usageView) {
 // ---------------------------------------------------------------- privacy
 function originOf(u) {
   try {
-    return new URL(u).origin;
+    const o = new URL(u).origin;
+    return o === 'null' ? '' : o; // data:, file: and about: pages have an opaque "null" origin
   } catch {
     return '';
   }
@@ -689,7 +688,8 @@ function setupSession(ses) {
   blocker.loadFile(path.join(__dirname, 'blocklist.txt'));
   blocker.loadFile(path.join(app.getPath('userData'), 'blocklist.txt'));
 
-  userAgent = ses.getUserAgent().replace(/\s(Electron|nimvane)\/\S+/gi, '');
+  userAgent = cleanUserAgent(ses.getUserAgent());
+  app.userAgentFallback = userAgent;
   ses.setUserAgent(userAgent);
 
   const filter = { urls: ['http://*/*', 'https://*/*'] };
@@ -714,10 +714,12 @@ function setupSession(ses) {
   ses.webRequest.onBeforeSendHeaders(filter, (details, cb) => {
     details.requestHeaders['DNT'] = '1';
     details.requestHeaders['Sec-GPC'] = '1';
-    if (isGoogleSignIn(details.url)) {
-      // Firefox doesn't send client hints; leaving Chromium's in would contradict the user agent.
-      details.requestHeaders['User-Agent'] = GOOGLE_SIGNIN_UA;
-      for (const k of Object.keys(details.requestHeaders)) if (/^sec-ch-ua/i.test(k)) delete details.requestHeaders[k];
+    // Chromium sends client hints only to secure origins.
+    if (uaData && details.url.startsWith('https:')) {
+      const present = new Set(Object.keys(details.requestHeaders).map((k) => k.toLowerCase()));
+      for (const [k, v] of Object.entries(clientHintHeaders(uaData, wantsDetailedHints(details.url)))) {
+        if (!present.has(k.toLowerCase())) details.requestHeaders[k] = v;
+      }
     }
     cb({ requestHeaders: details.requestHeaders });
   });
@@ -761,6 +763,19 @@ ipcMain.on('update:install', () => updater?.install());
 
 // ---------------------------------------------------------------- boot
 // URLs passed on the command line, e.g. when Nimvane is the default browser.
+// The engine reports its real identity to pages; send the same values as request headers.
+function readUaData(wc) {
+  return wc
+    .executeJavaScript(
+      `(async () => {
+        const d = navigator.userAgentData;
+        const h = await d.getHighEntropyValues(['architecture', 'bitness', 'fullVersionList', 'model', 'platformVersion', 'wow64']);
+        return { brands: d.brands, mobile: d.mobile, platform: d.platform, ...h };
+      })()`
+    )
+    .catch(() => null);
+}
+
 function launchUrls(argv) {
   const urls = [];
   for (const a of argv.slice(1)) {
@@ -807,7 +822,8 @@ if (!app.requestSingleInstanceLock()) {
     chromeView.webContents.on('context-menu', (_e, params) => showContextMenu(chromeView.webContents, params, false));
     win.contentView.addChildView(chromeView);
     chromeView.webContents.loadFile(path.join(__dirname, 'ui', 'index.html'));
-    chromeView.webContents.once('did-finish-load', () => {
+    chromeView.webContents.once('did-finish-load', async () => {
+      uaData = await readUaData(chromeView.webContents);
       const urls = launchUrls(process.argv);
       if (urls.length) urls.forEach((u) => createTab(u));
       else createTab();
@@ -830,13 +846,4 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   app.on('window-all-closed', () => app.quit());
-
-// Match navigator.userAgent to the Firefox headers on Google sign-in pages, in tabs and sign-in popups alike.
-app.on('web-contents-created', (_e, wc) => {
-  wc.on('did-start-navigation', (details) => {
-    if (!details.isMainFrame || details.isSameDocument || !userAgent) return;
-    const ua = isGoogleSignIn(details.url) ? GOOGLE_SIGNIN_UA : userAgent;
-    if (wc.getUserAgent() !== ua) wc.setUserAgent(ua);
-  });
-});
 }

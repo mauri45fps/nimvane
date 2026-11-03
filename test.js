@@ -1,5 +1,5 @@
 const assert = require('assert');
-const { resolveInput, stripTracking, matchShortcut, summarizeMetrics, isGoogleSignIn, firefoxUserAgent } = require('./util');
+const { resolveInput, stripTracking, matchShortcut, summarizeMetrics, clientHintHeaders, wantsDetailedHints, cleanUserAgent } = require('./util');
 const { Blocker } = require('./blocker');
 
 assert.strictEqual(resolveInput('example.com'), 'https://example.com');
@@ -52,11 +52,33 @@ assert.strictEqual(sum.groups.gpu, 50);
 assert.strictEqual(sum.groups.ui, 20);
 assert.strictEqual(sum.groups.frames, 30);
 
-assert.ok(isGoogleSignIn('https://accounts.google.com/v3/signin/identifier?x=1'));
-assert.ok(isGoogleSignIn('https://accounts.youtube.com/accounts/SetSID'));
-assert.ok(!isGoogleSignIn('https://www.google.com/search?q=accounts.google.com'));
-assert.ok(!isGoogleSignIn('https://accounts.google.com.evil.example/'));
-assert.strictEqual(firefoxUserAgent('linux', Date.UTC(2024, 10, 26)), 'Mozilla/5.0 (X11; Linux x86_64; rv:132.0) Gecko/20100101 Firefox/132.0');
-assert.match(firefoxUserAgent('win32'), /^Mozilla\/5\.0 \(Windows NT 10\.0; Win64; x64; rv:\d+\.0\) Gecko\/20100101 Firefox\/\d+\.0$/);
+assert.strictEqual(
+  cleanUserAgent('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) nimvane/1.0.2 Chrome/152.0.7977.167 Electron/44.9.0 Safari/537.36'),
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36'
+);
+const uad = {
+  brands: [{ brand: 'Not?A_Brand', version: '24' }, { brand: 'Chromium', version: '152' }],
+  mobile: false,
+  platform: 'Linux',
+  fullVersionList: [{ brand: 'Not?A_Brand', version: '24.0.0.0' }, { brand: 'Chromium', version: '152.0.7977.167' }],
+  architecture: 'x86',
+  bitness: '64',
+  platformVersion: '7.3.1',
+  model: '',
+  wow64: false,
+};
+assert.deepStrictEqual(clientHintHeaders(uad, false), {
+  'Sec-CH-UA': '"Not?A_Brand";v="24", "Chromium";v="152"',
+  'Sec-CH-UA-Mobile': '?0',
+  'Sec-CH-UA-Platform': '"Linux"',
+});
+const full = clientHintHeaders(uad, true);
+assert.strictEqual(full['Sec-CH-UA-Full-Version-List'], '"Not?A_Brand";v="24.0.0.0", "Chromium";v="152.0.7977.167"');
+assert.strictEqual(full['Sec-CH-UA-Bitness'], '"64"');
+assert.strictEqual(full['Sec-CH-UA-WoW64'], '?0');
+assert.ok(wantsDetailedHints('https://accounts.google.com/v3/signin/identifier'));
+assert.ok(wantsDetailedHints('https://www.youtube.com/'));
+assert.ok(!wantsDetailedHints('https://example.com/'));
+assert.ok(!wantsDetailedHints('https://google.com.evil.example/'));
 
 console.log('all tests passed');

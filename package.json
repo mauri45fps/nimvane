@@ -1,7 +1,7 @@
 {
   "name": "nimvane",
   "productName": "Nimvane",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "A fast, lean, privacy-first web browser. Less weight. More web.",
   "homepage": "https://github.com/mauri45fps/nimvane",
   "main": "main.js",
@@ -16,8 +16,8 @@
     "dist:mac": "electron-builder --mac"
   },
   "devDependencies": {
-    "electron": "^33.0.0",
-    "electron-builder": "^25.0.0"
+    "electron": "^44.9.0",
+    "electron-builder": "^26.17.0"
   },
   "build": {
     "appId": "dev.nimvane.app",
@@ -71,11 +71,13 @@
         "text/html"
       ],
       "desktop": {
-        "GenericName": "Web Browser",
-        "StartupWMClass": "nimvane",
-        "StartupNotify": "true",
-        "MimeType": "x-scheme-handler/http;x-scheme-handler/https;text/html;"
-      }
+        "entry": {
+          "GenericName": "Web Browser",
+          "StartupWMClass": "nimvane",
+          "StartupNotify": "true"
+        }
+      },
+      "icon": "build/icons"
     },
     "win": {
       "target": [
@@ -126,7 +128,7 @@
     ]
   },
   "allowScripts": {
-    "electron@33.4.11": true
+    "electron@44.9.0": true
   },
   "author": {
     "name": "Nimvane"

@@ -97,23 +97,43 @@ function summarizeMetrics(metrics, tabPids, uiPids) {
   return { mem, cpu, tabs, groups, groupCpu };
 }
 
-// Google refuses sign-in from Chromium-based "embedded" browsers like Electron apps.
-// On its sign-in pages only, Nimvane presents itself as Firefox, which Google accepts.
-function isGoogleSignIn(u) {
+// Electron never sends User-Agent Client Hints (Sec-CH-UA*), which every real Chromium browser
+// sends on secure requests. Their absence marks the browser as embedded, and Google refuses
+// sign-in from embedded browsers. Build them from the engine's own navigator.userAgentData so
+// headers and page always agree.
+// ua: { brands, mobile, platform } plus getHighEntropyValues() fields when known.
+function clientHintHeaders(ua, highEntropy) {
+  const list = (brands) => brands.map((b) => `"${b.brand}";v="${b.version}"`).join(', ');
+  const h = {
+    'Sec-CH-UA': list(ua.brands),
+    'Sec-CH-UA-Mobile': ua.mobile ? '?1' : '?0',
+    'Sec-CH-UA-Platform': `"${ua.platform}"`,
+  };
+  if (highEntropy && ua.fullVersionList) {
+    h['Sec-CH-UA-Full-Version-List'] = list(ua.fullVersionList);
+    h['Sec-CH-UA-Arch'] = `"${ua.architecture || ''}"`;
+    h['Sec-CH-UA-Bitness'] = `"${ua.bitness || ''}"`;
+    h['Sec-CH-UA-Platform-Version'] = `"${ua.platformVersion || ''}"`;
+    h['Sec-CH-UA-Model'] = `"${ua.model || ''}"`;
+    h['Sec-CH-UA-WoW64'] = ua.wow64 ? '?1' : '?0';
+  }
+  return h;
+}
+
+// Google sites ask for the detailed hints (Accept-CH) and use them in their sign-in checks.
+// Everyone else gets only the basic three, like Chrome sends by default.
+function wantsDetailedHints(u) {
   try {
-    return /^accounts\.(google|youtube)\.com$/i.test(new URL(u).hostname);
+    return /(^|\.)(google\.com|youtube\.com|gstatic\.com|googleapis\.com)$/i.test(new URL(u).hostname);
   } catch {
     return false;
   }
 }
 
-// A current-looking Firefox user agent. Firefox ships every 4 weeks and 115 came out on
-// 2023-07-04; staying one release behind the estimate keeps it a version that really exists.
-function firefoxUserAgent(platform = process.platform, now = Date.now()) {
-  const v = 115 + Math.floor((now - Date.UTC(2023, 6, 4)) / (28 * 864e5)) - 1;
-  const os =
-    platform === 'win32' ? 'Windows NT 10.0; Win64; x64' : platform === 'darwin' ? 'Macintosh; Intel Mac OS X 10.15' : 'X11; Linux x86_64';
-  return `Mozilla/5.0 (${os}; rv:${v}.0) Gecko/20100101 Firefox/${v}.0`;
+// Chrome reports only its major version in the user agent ("Chrome/152.0.0.0"), and Electron
+// adds "Electron/x" and the app name. Make Nimvane's look like a regular Chromium browser.
+function cleanUserAgent(ua) {
+  return ua.replace(/\s(Electron|nimvane)\/\S+/gi, '').replace(/Chrome\/(\d+)\.[\d.]+/, 'Chrome/$1.0.0.0');
 }
 
-module.exports = { resolveInput, stripTracking, matchShortcut, summarizeMetrics, isGoogleSignIn, firefoxUserAgent, SEARCH };
+module.exports = { resolveInput, stripTracking, matchShortcut, summarizeMetrics, clientHintHeaders, wantsDetailedHints, cleanUserAgent, SEARCH };
